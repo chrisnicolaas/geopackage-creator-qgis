@@ -1,11 +1,12 @@
 [general]
 name=GeoPackage Creator for QGIS
 qgisMinimumVersion=3.0
-description=Downloads Natural Earth boundaries and joins them with up-to-date World Bank country classifications to output standardized GeoPackages for academic and professional use.
+description=Downloads Natural Earth boundaries and joins them with country and economic entity classifications pulled directly from the World Bank database, corresponding with international standardized economic groupings. Outputs standardized GeoPackages for academic and professional use.
 version=1.0.0
 author=Chris Nicolaas
-email=
+email=chris.nicolaas@gmail.com
 about=This plugin helps academic researchers quickly generate standardized base maps by joining Natural Earth boundaries with up-to-date World Bank country metadata.
+homepage=https://github.com/chrisnicolaas/geopackage-creator-qgis
 tracker=https://github.com/chrisnicolaas/geopackage-creator-qgis/issues
 repository=https://github.com/chrisnicolaas/geopackage-creator-qgis
 category=Vector
