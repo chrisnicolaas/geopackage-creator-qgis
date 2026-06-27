@@ -51,14 +51,15 @@ class WorldBankNaturalEarthAlgorithm(QgsProcessingAlgorithm):
     def shortHelpString(self):
         return self.tr(
             'Downloads Natural Earth boundaries and merges them with country and '
-            'economic entity classifications pulled directly from the World Bank '
-            'database, corresponding with international standardized economic '
-            'groupings (regions and income levels).\n\n'
+            'economic entity classifications (regions and income levels) pulled '
+            'directly from the World Bank database.\n\n'
+            'Enter ISO-3 country codes for the creation of a GeoPackage of the selected '
+            'countries. Groups of countries (i.e., EU-27 or Latin American & Caribbean) '
+            'are also possible. Use comma-separated entries (e.g., ESP,PRT,FRA) to '
+            'create 1 single GeoPackage containing all selected countries.\n\n'
             'Output GeoPackage includes:\n'
             '- admin0_countries: polygon boundaries with World Bank attributes\n'
-            '- country_capitals: point layer of all capital cities\n\n'
-            'You can optionally filter the output by a comma-separated list of '
-            'ISO-3 country codes (e.g. ESP,PRT,FRA).'
+            '- country_capitals: point layer of all capital cities'
         )
 
     def initAlgorithm(self, config=None):
@@ -76,11 +77,11 @@ class WorldBankNaturalEarthAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
-        # Optional country ISO-3 filter
+        # Optional country ISO-3 filter description
         self.addParameter(
             QgsProcessingParameterString(
                 self.COUNTRY_ISO3,
-                self.tr('Filter by ISO-3 Country Codes (comma-separated, e.g. ESP,PRT,FRA)'),
+                self.tr('Enter ISO-3 country codes (comma-separated, e.g. ESP,PRT,FRA)'),
                 defaultValue='',
                 optional=True
             )
