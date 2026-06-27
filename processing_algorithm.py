@@ -28,30 +28,7 @@ from qgis.core import (
 class WorldBankNaturalEarthAlgorithm(QgsProcessingAlgorithm):
     OUTPUT_FILE  = 'OUTPUT_FILE'
     RESOLUTION   = 'RESOLUTION'
-    REGION       = 'REGION'
-    INCOME       = 'INCOME'
     COUNTRY_ISO3 = 'COUNTRY_ISO3'
-
-    # World Bank region labels (first entry = All)
-    WB_REGIONS = [
-        'All regions',
-        'East Asia & Pacific',
-        'Europe & Central Asia',
-        'Latin America & Caribbean',
-        'Middle East & North Africa',
-        'North America',
-        'South Asia',
-        'Sub-Saharan Africa',
-    ]
-
-    # World Bank income categories (first entry = All)
-    WB_INCOMES = [
-        'All income levels',
-        'High income',
-        'Upper middle income',
-        'Lower middle income',
-        'Low income',
-    ]
 
     def tr(self, string):
         return QCoreApplication.translate('Processing', string)
@@ -80,8 +57,8 @@ class WorldBankNaturalEarthAlgorithm(QgsProcessingAlgorithm):
             'Output GeoPackage includes:\n'
             '- admin0_countries: polygon boundaries with World Bank attributes\n'
             '- country_capitals: point layer of all capital cities\n\n'
-            'You can optionally filter the output by World Bank region, income level, '
-            'or by a comma-separated list of ISO-3 country codes (e.g. ESP,PRT,FRA).'
+            'You can optionally filter the output by a comma-separated list of '
+            'ISO-3 country codes (e.g. ESP,PRT,FRA).'
         )
 
     def initAlgorithm(self, config=None):
@@ -96,28 +73,6 @@ class WorldBankNaturalEarthAlgorithm(QgsProcessingAlgorithm):
                     self.tr('1:10m  (High Resolution, Large)'),
                 ],
                 defaultValue=0
-            )
-        )
-
-        # World Bank region filter
-        self.addParameter(
-            QgsProcessingParameterEnum(
-                self.REGION,
-                self.tr('Filter by World Bank Region'),
-                options=[self.tr(r) for r in self.WB_REGIONS],
-                defaultValue=0,
-                optional=True
-            )
-        )
-
-        # World Bank income level filter
-        self.addParameter(
-            QgsProcessingParameterEnum(
-                self.INCOME,
-                self.tr('Filter by World Bank Income Level'),
-                options=[self.tr(i) for i in self.WB_INCOMES],
-                defaultValue=0,
-                optional=True
             )
         )
 
@@ -142,8 +97,6 @@ class WorldBankNaturalEarthAlgorithm(QgsProcessingAlgorithm):
 
     def processAlgorithm(self, parameters, context, feedback):
         resolution_idx = self.parameterAsEnum(parameters, self.RESOLUTION, context)
-        region_idx     = self.parameterAsEnum(parameters, self.REGION, context)
-        income_idx     = self.parameterAsEnum(parameters, self.INCOME, context)
         iso3_filter    = self.parameterAsString(parameters, self.COUNTRY_ISO3, context).strip().upper()
         output_file    = self.parameterAsFile(parameters, self.OUTPUT_FILE, context)
 
@@ -154,10 +107,6 @@ class WorldBankNaturalEarthAlgorithm(QgsProcessingAlgorithm):
         iso3_set = set()
         if iso3_filter:
             iso3_set = {c.strip() for c in iso3_filter.split(',') if c.strip()}
-
-        # Selected filters (empty string = All)
-        selected_region = '' if region_idx == 0 else self.WB_REGIONS[region_idx]
-        selected_income = '' if income_idx == 0 else self.WB_INCOMES[income_idx]
 
         # ── 1. Fetch World Bank data ──────────────────────────────────────────
         feedback.setProgressText('Querying World Bank Country API...')
@@ -192,22 +141,12 @@ class WorldBankNaturalEarthAlgorithm(QgsProcessingAlgorithm):
 
         feedback.setProgressText(f'Loaded {len(wb_dict)} countries from World Bank.')
 
-        # Apply region filter to wb_dict
-        if selected_region:
-            wb_dict = {k: v for k, v in wb_dict.items() if v['wb_region'] == selected_region}
-            feedback.setProgressText(f'Region filter "{selected_region}": {len(wb_dict)} countries remaining.')
-
-        # Apply income level filter to wb_dict
-        if selected_income:
-            wb_dict = {k: v for k, v in wb_dict.items() if v['wb_income_level'] == selected_income}
-            feedback.setProgressText(f'Income filter "{selected_income}": {len(wb_dict)} countries remaining.')
-
         # Apply ISO-3 filter
         if iso3_set:
             wb_dict = {k: v for k, v in wb_dict.items() if k in iso3_set}
             feedback.setProgressText(f'ISO-3 filter: {len(wb_dict)} countries remaining.')
 
-        has_filter = bool(selected_region or selected_income or iso3_set)
+        has_filter = bool(iso3_set)
 
         # ── 2. Download Natural Earth boundaries ──────────────────────────────
         temp_dir = tempfile.mkdtemp()
@@ -252,9 +191,10 @@ class WorldBankNaturalEarthAlgorithm(QgsProcessingAlgorithm):
         out_fields.append(QgsField('wb_lending_type',  QVariant.String))
         out_fields.append(QgsField('capital_name',     QVariant.String))
 
-        options             = QgsVectorFileWriter.SaveVectorOptions()
-        options.driverName  = 'GPKG'
-        options.layerName   = 'admin0_countries'
+        options                      = QgsVectorFileWriter.SaveVectorOptions()
+        options.driverName           = 'GPKG'
+        options.layerName            = 'admin0_countries'
+        options.actionOnExistingFile = QgsVectorFileWriter.CreateOrOverwriteFile
 
         transform_context = QgsProject.instance().transformContext()
 
@@ -269,7 +209,11 @@ class WorldBankNaturalEarthAlgorithm(QgsProcessingAlgorithm):
 
         if writer.hasError() != QgsVectorFileWriter.NoError:
             feedback.reportError(f'GeoPackage writer error: {writer.errorMessage()}')
-            shutil.rmtree(temp_dir)
+            del ne_layer
+            try:
+                shutil.rmtree(temp_dir)
+            except Exception:
+                pass
             return {}
 
         ne_names = ne_layer.fields().names()
