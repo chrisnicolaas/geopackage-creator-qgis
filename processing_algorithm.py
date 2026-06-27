@@ -28,6 +28,7 @@ from qgis.core import (
 class WorldBankNaturalEarthAlgorithm(QgsProcessingAlgorithm):
     OUTPUT_FILE  = 'OUTPUT_FILE'
     RESOLUTION   = 'RESOLUTION'
+    PRESET       = 'PRESET'
     COUNTRY_ISO3 = 'COUNTRY_ISO3'
 
     def tr(self, string):
@@ -77,6 +78,25 @@ class WorldBankNaturalEarthAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
+        # Preset Group dropdown
+        self.addParameter(
+            QgsProcessingParameterEnum(
+                self.PRESET,
+                self.tr('Preset Country Group'),
+                options=[
+                    self.tr('None (Use custom ISO-3 codes below)'),
+                    self.tr('World'),
+                    self.tr('Europe'),
+                    self.tr('Africa'),
+                    self.tr('Asia'),
+                    self.tr('Oceania'),
+                    self.tr('North America'),
+                    self.tr('Latin America & Caribbean'),
+                ],
+                defaultValue=0
+            )
+        )
+
         # Optional country ISO-3 filter description
         self.addParameter(
             QgsProcessingParameterString(
@@ -98,6 +118,7 @@ class WorldBankNaturalEarthAlgorithm(QgsProcessingAlgorithm):
 
     def processAlgorithm(self, parameters, context, feedback):
         resolution_idx = self.parameterAsEnum(parameters, self.RESOLUTION, context)
+        preset_idx     = self.parameterAsEnum(parameters, self.PRESET, context)
         iso3_filter    = self.parameterAsString(parameters, self.COUNTRY_ISO3, context).strip().upper()
         output_file    = self.parameterAsFile(parameters, self.OUTPUT_FILE, context)
 
@@ -108,6 +129,10 @@ class WorldBankNaturalEarthAlgorithm(QgsProcessingAlgorithm):
         iso3_set = set()
         if iso3_filter:
             iso3_set = {c.strip() for c in iso3_filter.split(',') if c.strip()}
+
+        # Preset name resolver
+        presets = ['none', 'world', 'europe', 'africa', 'asia', 'oceania', 'north_america', 'latam_caribbean']
+        preset_name = presets[preset_idx]
 
         # ── 1. Fetch World Bank data ──────────────────────────────────────────
         feedback.setProgressText('Querying World Bank Country API...')
@@ -142,12 +167,13 @@ class WorldBankNaturalEarthAlgorithm(QgsProcessingAlgorithm):
 
         feedback.setProgressText(f'Loaded {len(wb_dict)} countries from World Bank.')
 
-        # Apply ISO-3 filter
-        if iso3_set:
+        # Pre-filter wb_dict if preset is Latin America & Caribbean
+        if preset_name == 'latam_caribbean':
+            wb_dict = {k: v for k, v in wb_dict.items() if 'Latin America & Caribbean' in v['wb_region']}
+            feedback.setProgressText(f'Latin America & Caribbean preset: {len(wb_dict)} countries remaining.')
+        elif preset_name == 'none' and iso3_set:
             wb_dict = {k: v for k, v in wb_dict.items() if k in iso3_set}
             feedback.setProgressText(f'ISO-3 filter: {len(wb_dict)} countries remaining.')
-
-        has_filter = bool(iso3_set)
 
         # ── 2. Download Natural Earth boundaries ──────────────────────────────
         temp_dir = tempfile.mkdtemp()
@@ -217,12 +243,28 @@ class WorldBankNaturalEarthAlgorithm(QgsProcessingAlgorithm):
                 pass
             return {}
 
+        written_iso3 = set()
         ne_names = ne_layer.fields().names()
         for feature in ne_layer.getFeatures():
             iso3_val = feature[iso3_col]
+            continent_val = feature['CONTINENT'] if 'CONTINENT' in ne_names else ''
 
             # Skip features not in the filter sets
-            if has_filter and iso3_val not in wb_dict:
+            if preset_name == 'world':
+                pass  # Export all countries
+            elif preset_name == 'europe' and continent_val != 'Europe':
+                continue
+            elif preset_name == 'africa' and continent_val != 'Africa':
+                continue
+            elif preset_name == 'asia' and continent_val != 'Asia':
+                continue
+            elif preset_name == 'oceania' and continent_val != 'Oceania':
+                continue
+            elif preset_name == 'north_america' and continent_val != 'North America':
+                continue
+            elif preset_name == 'latam_caribbean' and iso3_val not in wb_dict:
+                continue
+            elif preset_name == 'none' and iso3_set and iso3_val not in wb_dict:
                 continue
 
             wb_info     = wb_dict.get(iso3_val, {})
@@ -238,6 +280,7 @@ class WorldBankNaturalEarthAlgorithm(QgsProcessingAlgorithm):
             new_feature['wb_lending_type'] = wb_info.get('wb_lending_type', '')
             new_feature['capital_name']    = wb_info.get('capital_name',    '')
             writer.addFeature(new_feature)
+            written_iso3.add(iso3_val)
 
         del writer
 
@@ -265,6 +308,8 @@ class WorldBankNaturalEarthAlgorithm(QgsProcessingAlgorithm):
         )
 
         for iso3_code, wb_info in wb_dict.items():
+            if iso3_code not in written_iso3:
+                continue
             lon = wb_info.get('capital_lon')
             lat = wb_info.get('capital_lat')
             if lon is not None and lat is not None:
