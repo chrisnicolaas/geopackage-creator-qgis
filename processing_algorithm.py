@@ -76,12 +76,12 @@ class WorldBankNaturalEarthAlgorithm(QgsProcessingAlgorithm):
             'Downloads Natural Earth boundaries and merges them with country and '
             'economic entity classifications pulled directly from the World Bank '
             'database, corresponding with international standardized economic '
-            'groupings (regions, income levels, and lending types).\n\n'
+            'groupings (regions and income levels).\n\n'
             'Output GeoPackage includes:\n'
             '- admin0_countries: polygon boundaries with World Bank attributes\n'
             '- country_capitals: point layer of all capital cities\n\n'
-            'You can optionally filter the output by World Bank region or by a '
-            'comma-separated list of ISO-3 country codes (e.g. ESP,PRT,FRA).'
+            'You can optionally filter the output by World Bank region, income level, '
+            'or by a comma-separated list of ISO-3 country codes (e.g. ESP,PRT,FRA).'
         )
 
     def initAlgorithm(self, config=None):
